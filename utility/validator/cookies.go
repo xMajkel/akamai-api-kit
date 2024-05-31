@@ -18,7 +18,7 @@ func IsCookieValid(abck string) bool {
 	return abckSplit[1] == "0"
 }
 
-// IsCookieValid determines if _abck cookie was set by the Akamai as invalidated
+// IsCookieValid determines if _abck cookie was set by the Akamai as invalidated (eg. ~0~-1~-1)
 //
 // Parameters:
 //   - abck: _abck cookie value

@@ -36,7 +36,7 @@ if err != nil {
   return
 }
 
-provider.SetScriptUrl(scriptUrl)
+provider.SetScriptUrl("https://www.example.com" + scriptPath)
 ```
  5. Fetch script body using `https://www.example.com + scriptPath`
 ```go
