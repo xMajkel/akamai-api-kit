@@ -1,5 +1,12 @@
 package api
 
+import "errors"
+
+var (
+	ErrConnection   = errors.New("akamai-api: Connection error")
+	ErrNoSensorData = errors.New("akamai-api: No sensor data in API response")
+)
+
 type Provider interface {
 	GenerateWebSensor(int, string, string) (string, error)
 	SetScriptUrl(string)
@@ -7,12 +14,10 @@ type Provider interface {
 }
 
 type Config struct {
-	ApiKey     string
-	UserAgent  string
-	Site       string
-	Dynamic    bool
-	ScriptUrl  string
-	ScriptBody []byte
+	ApiKey    string
+	UserAgent string
+	Site      string
+	Dynamic   bool
 }
 
 // NewApiConfig returns new config for the API providers, it is required to create api provider implementing the Provider interface

@@ -18,11 +18,13 @@ const apiScriptConfigCacheEP = "https://ak-ppsaua.hwkapi.com/006180d12cf7/c"
 var ErrHawk = errors.New("hawk")
 var separatorBmsz = []byte("****")
 
-// Static check to make sure type implements all functions of the interface correctly
+// Static check to make sure struct implements all functions of the interface correctly
 var _ api.Provider = (*HawkApi)(nil)
 
 type HawkApi struct {
 	*api.Config
+	scriptUrl           string
+	scriptBody          []byte
 	dynamicScriptConfig string
 	httpClient          *http.Client
 }
@@ -50,18 +52,18 @@ func NewApi(conf *api.Config, options ...Option) *HawkApi {
 
 // SetScriptUrl sets the URL of the script to be used, has to be with domain, eg. "https://www.example.com/akamai_script_path"
 func (ap *HawkApi) SetScriptUrl(url string) {
-	ap.ScriptUrl = url
+	ap.scriptUrl = url
 }
 
 // SetScriptBody sets the body of the script to be used and if dynamic is set in config it fetches script config from API provider
 // Return error if it couldn't fetch dynamic script config
 func (ap *HawkApi) SetScriptBody(body []byte) error {
-	ap.ScriptBody = body
+	ap.scriptBody = body
 
 	if ap.Dynamic {
 		err := ap.getDynamicScriptConfig(body)
 		if err != nil {
-			return errors.Join(ErrHawk, err)
+			return err
 		}
 	}
 	return nil
@@ -109,12 +111,12 @@ func (ap *HawkApi) GenerateWebSensor(iteration int, abck string, bmsz string) (s
 
 	jsonPayload, err := json.Marshal(payload)
 	if err != nil {
-		return "", errors.Join(ErrHawk, err)
+		return "", err
 	}
 
 	req, err := http.NewRequest("POST", apiGenerateWebSensorEP, bytes.NewBuffer(jsonPayload))
 	if err != nil {
-		return "", errors.Join(ErrHawk, err)
+		return "", err
 	}
 	req.Header.Set("X-Api-Key", ap.ApiKey)
 	req.Header.Set("Content-Type", "application/json")
@@ -122,16 +124,16 @@ func (ap *HawkApi) GenerateWebSensor(iteration int, abck string, bmsz string) (s
 
 	resp, err := ap.httpClient.Do(req)
 	if err != nil {
-		return "", errors.Join(ErrHawk, err)
+		return "", api.ErrConnection
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		return "", errors.Join(ErrHawk, errors.New(resp.Status))
+		return "", errors.New(resp.Status)
 	}
 
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", errors.Join(ErrHawk, err)
+		return "", err
 	}
 
 	if bmsz != "" {
@@ -159,7 +161,7 @@ func (ap *HawkApi) getDynamicScriptConfig(scriptBody []byte) error {
 
 	resp, err := ap.httpClient.Do(req)
 	if err != nil {
-		return err
+		return api.ErrConnection
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {

@@ -14,13 +14,13 @@ import (
 const apiGenerateWebSensorEP = "https://akm.justhyped.dev/sensor"
 const apiScriptConfigEP = "https://akm.justhyped.dev/dynamic"
 
-var ErrHyperSolutions = errors.New("hyper-solutions")
-
-// Static check to make sure type implements all functions of the interface correctly
+// Static check to make sure struct implements all functions of the interface correctly
 var _ api.Provider = (*HyperSolutionsApi)(nil)
 
 type HyperSolutionsApi struct {
 	*api.Config
+	scriptUrl           string
+	scriptBody          []byte
 	dynamicScriptConfig string
 	scriptBodyHash      string
 	httpClient          *http.Client
@@ -49,13 +49,13 @@ func NewApi(conf *api.Config, options ...Option) *HyperSolutionsApi {
 
 // SetScriptUrl sets the URL of the script to be used, has to be with domain, eg. "https://www.example.com/akamai_script_path"
 func (ap *HyperSolutionsApi) SetScriptUrl(url string) {
-	ap.ScriptUrl = url
+	ap.scriptUrl = url
 }
 
 // SetScriptBody sets the body of the script to be used, computes its hash and if dynamic is set in config it fetches script config from API provider
 // Return error if it couldn't fetch dynamic script config
 func (ap *HyperSolutionsApi) SetScriptBody(body []byte) error {
-	ap.ScriptBody = body
+	ap.scriptBody = body
 
 	hash := sha256.Sum256(body)
 	ap.scriptBodyHash = hex.EncodeToString(hash[:])
@@ -63,7 +63,7 @@ func (ap *HyperSolutionsApi) SetScriptBody(body []byte) error {
 	if ap.Dynamic {
 		err := ap.getDynamicScriptConfig(body)
 		if err != nil {
-			return errors.Join(ErrHyperSolutions, err)
+			return err
 		}
 	}
 	return nil
@@ -114,33 +114,33 @@ func (ap *HyperSolutionsApi) GenerateWebSensor(iteration int, abck string, bmsz 
 
 	jsonPayload, err := json.Marshal(payload)
 	if err != nil {
-		return "", errors.Join(ErrHyperSolutions, err)
+		return "", err
 	}
 
 	req, err := http.NewRequest(http.MethodPost, apiGenerateWebSensorEP, bytes.NewBuffer(jsonPayload))
 	if err != nil {
-		return "", errors.Join(ErrHyperSolutions, err)
+		return "", err
 	}
 	req.Header.Set("content-type", "application/json")
 	req.Header.Set("x-api-key", ap.ApiKey)
 
 	resp, err := ap.httpClient.Do(req)
 	if err != nil {
-		return "", errors.Join(ErrHyperSolutions, err)
+		return "", api.ErrConnection
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		return "", errors.Join(ErrHyperSolutions, errors.New(resp.Status))
+		return "", errors.New(resp.Status)
 	}
 
 	var respJson apiResponseJson
 	err = json.NewDecoder(resp.Body).Decode(&respJson)
 	if err != nil {
-		return "", errors.Join(ErrHyperSolutions, err)
+		return "", err
 	}
 
 	if respJson.ErrrorMessage != "" {
-		return "", errors.Join(ErrHyperSolutions, errors.New(respJson.ErrrorMessage))
+		return "", errors.New(respJson.ErrrorMessage)
 	}
 
 	return respJson.Payload, nil
@@ -164,7 +164,7 @@ func (ap *HyperSolutionsApi) getDynamicScriptConfig(scriptBody []byte) error {
 
 	resp, err := ap.httpClient.Do(req)
 	if err != nil {
-		return err
+		return api.ErrConnection
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {

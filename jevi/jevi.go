@@ -15,13 +15,13 @@ import (
 
 const apiGenerateSensorEP = "https://www.jevi.dev/Akamai"
 
-var ErrJevi = errors.New("jevi")
-
-// Static check to make sure type implements all functions of the interface correctly
+// Static check to make sure struct implements all functions of the interface correctly
 var _ api.Provider = (*JeviApi)(nil)
 
 type JeviApi struct {
 	*api.Config
+	scriptUrl      string
+	scriptBody     []byte
 	decryptionKey  string
 	scriptBodyHash string
 	httpClient     *http.Client
@@ -57,12 +57,12 @@ func NewApi(conf *api.Config, options ...Option) *JeviApi {
 
 // SetScriptUrl sets the URL of the script to be used, has to be with domain, eg. "https://www.example.com/akamai_script_path"
 func (ap *JeviApi) SetScriptUrl(url string) {
-	ap.ScriptUrl = url
+	ap.scriptUrl = url
 }
 
 // SetScriptBody sets the body of the script to be used and computes its hash if dynamic is set in config. It doesn't return any errors
 func (ap *JeviApi) SetScriptBody(body []byte) error {
-	ap.ScriptBody = body
+	ap.scriptBody = body
 	if ap.Dynamic {
 		checksumBytes := md5.Sum(body)
 		ap.scriptBodyHash = hex.EncodeToString(checksumBytes[:])
@@ -100,22 +100,22 @@ func (ap *JeviApi) GenerateWebSensor(iteration int, abck string, bmsz string) (s
 
 	req, err := http.NewRequest(http.MethodPost, apiGenerateSensorEP, strings.NewReader(form.Encode()))
 	if err != nil {
-		return "", errors.Join(ErrJevi, err)
+		return "", err
 	}
 	req.Header.Set("content-type", "application/x-www-form-urlencoded")
 
 	resp, err := ap.httpClient.Do(req)
 	if err != nil {
-		return "", errors.Join(ErrJevi, err)
+		return "", api.ErrConnection
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		return "", errors.Join(ErrJevi, errors.New(resp.Status))
+		return "", errors.New(resp.Status)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", errors.Join(ErrJevi, err)
+		return "", err
 	}
 
 	if ap.decryptionKey != "" {

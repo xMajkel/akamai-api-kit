@@ -13,13 +13,13 @@ import (
 
 const apiGenerateWebSensorEP = "https://akamai.fdisservices.co/v2/web"
 
-var ErrFdis = errors.New("fdis")
-
-// Static check to make sure type implements all functions of the interface correctly
+// Static check to make sure struct implements all functions of the interface correctly
 var _ api.Provider = (*FdisApi)(nil)
 
 type FdisApi struct {
 	*api.Config
+	scriptUrl      string
+	scriptBody     []byte
 	scriptBodyHash string
 	httpClient     *http.Client
 }
@@ -47,12 +47,12 @@ func NewApi(conf *api.Config, options ...Option) *FdisApi {
 
 // SetScriptUrl sets the URL of the script to be used, has to be with domain, eg. "https://www.example.com/akamai_script_path"
 func (ap *FdisApi) SetScriptUrl(url string) {
-	ap.ScriptUrl = url
+	ap.scriptUrl = url
 }
 
 // SetScriptBody sets the body of the script to be used and computes its hash if dynamic is set in config. It doesn't return any errors
 func (ap *FdisApi) SetScriptBody(body []byte) error {
-	ap.ScriptBody = body
+	ap.scriptBody = body
 	if ap.Dynamic {
 		hash := md5.Sum(body)
 		ap.scriptBodyHash = hex.EncodeToString(hash[:])
@@ -93,7 +93,7 @@ func (ap *FdisApi) GenerateWebSensor(iteration int, abck string, bmsz string) (s
 		Url:       ap.Site,
 		Type:      1,
 		Abck:      abck,
-		ScriptUrl: ap.ScriptUrl,
+		ScriptUrl: ap.scriptUrl,
 		Keyboard:  false,
 	}
 
@@ -109,33 +109,33 @@ func (ap *FdisApi) GenerateWebSensor(iteration int, abck string, bmsz string) (s
 
 	jsonPayload, err := json.Marshal(payload)
 	if err != nil {
-		return "", errors.Join(ErrFdis, err)
+		return "", err
 	}
 
 	req, err := http.NewRequest(http.MethodPost, apiGenerateWebSensorEP, bytes.NewBuffer(jsonPayload))
 	if err != nil {
-		return "", errors.Join(ErrFdis, err)
+		return "", err
 	}
 	req.Header.Set("content-type", "application/json")
 	req.Header.Set("x-api-key", ap.ApiKey)
 
 	resp, err := ap.httpClient.Do(req)
 	if err != nil {
-		return "", errors.Join(ErrFdis, err)
+		return "", api.ErrConnection
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		return "", errors.Join(ErrFdis, errors.New(resp.Status))
+		return "", errors.New(resp.Status)
 	}
 
 	var respJson apiResponseJson
 	err = json.NewDecoder(resp.Body).Decode(&respJson)
 	if err != nil {
-		return "", errors.Join(ErrFdis, err)
+		return "", err
 	}
 
 	if respJson.Error != "" {
-		return "", errors.Join(ErrFdis, errors.New(respJson.Error))
+		return "", errors.New(respJson.Error)
 	}
 
 	return respJson.Sensor, nil
